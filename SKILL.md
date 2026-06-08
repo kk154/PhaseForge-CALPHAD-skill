@@ -1,6 +1,6 @@
 ---
 name: mat-phaseforge-calphad
-description: Compute calculation-driven ternary isothermal phase diagrams for any user-specified chemical system and temperature using PhaseForge, ORB/MLIP structure energetics, literature/binary-phase-diagram compound discovery, Materials Project structure downloads, local CIFs, pycalphad TDB construction, optional phonopy vibrational free-energy corrections, high-resolution grid sampling, and Thermo-Calc-style colored straight-boundary plotting. Use when asked to identify binary/ternary compounds in a system, download their structures from MP, calculate or refine a CALPHAD-like computed phase diagram workflow, or plot a computed isothermal section without fitting to experiment.
+description: Compute calculation-driven ternary isothermal phase diagrams for any user-specified chemical system and temperature using PhaseForge, ORB/MLIP structure energetics, literature/binary-phase-diagram compound discovery, Materials Project structure downloads, local CIFs, pycalphad TDB construction, phonopy vibrational free-energy and formation-vibrational-free-energy corrections for the relaxed structures, high-resolution grid sampling, and Thermo-Calc-style colored straight-boundary plotting. Use when asked to identify binary/ternary compounds in a system, download their structures from MP, calculate or refine a CALPHAD-like computed phase diagram workflow, or plot a computed isothermal section without fitting to experiment.
 ---
 
 # PhaseForge CALPHAD Phase Diagrams
@@ -9,12 +9,15 @@ Use this skill to calculate an isothermal ternary phase diagram for a user-given
 
 Do not fit, tune, or optimize parameters against an experimental phase diagram unless the user explicitly asks for a separate inverse-modeling task. Experimental figures may be used for visual comparison only when the user allows it.
 
+The default final diagram must use phonon-corrected Gibbs energies. After ORB relaxation, calculate phonopy vibrational free energies for the relaxed compound structures and the elemental reference structures, convert them to formation vibrational free energies, apply those corrections to the TDB, and sample/plot the corrected TDB. A 0 K ORB-only TDB is an intermediate diagnostic, not the final result, unless the user explicitly asks to skip phonons or a phonon calculation is infeasible.
+
 ## Inputs To Establish
 
 - Components: exactly three real components for the ternary section, for example `ER,FE,TI` or `NI,AL,CR`.
 - Temperature: Kelvin preferred; convert Celsius by `T_K = T_C + 273.15`.
 - PhaseForge level and lattices: usually `PHASEFORGE_LEVEL=2` and `BCC_A2,FCC_A1,HCP_A3,FCC_L12,...` as relevant.
 - Structures: local CIFs first; query Materials Project only for missing phases.
+- Elemental phonon reference structures: one relaxed structure for each component, with phase labels such as `A_REF`, `B_REF`, `C_REF`.
 - Compound and solution-phase models: derive from structures and chemistry of the target system. Do not reuse another system's sublattice model.
 - Plot resolution: use `step=0.005` for detailed line-style Thermo-Calc plots when runtime permits.
 
@@ -29,6 +32,7 @@ Scripts live in `scripts/`; copy them into the run directory and patch per-syste
 - `download_mp_structures.py`: download CIFs from Materials Project for candidate compounds found from literature/phase-diagram review.
 - `merge_compound_energies.py`: merge compound energy tables.
 - `build_compound_tdb.py`: add stoichiometric compound phases using a per-system reference CSV.
+- `prepare_phonon_targets.py`: create `phonon_targets.csv` and `phonon_references.csv` from relaxed compounds and elemental reference structures.
 - `calc_vibrational_free_energy.py`: phonopy/ORB vibrational free energies for a per-system target CSV.
 - `make_vibrational_corrections.py`: convert vibrational free energies to formation vibrational corrections using a per-system element-reference CSV.
 - `apply_thermal_corrections.py`: apply finite-temperature Gibbs shifts from a correction CSV to a TDB.
@@ -108,16 +112,23 @@ wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && s
 
 For a target system with mixed-sublattice compounds or known homogeneity ranges, create a system-specific endmember script in the run directory. Derive the sublattice model from CIF mixed occupancies, crystallographic sites, or chemically meaningful substitutions. Calibrate interaction terms only from computed endmember/compound energies unless the user explicitly requests experimental fitting.
 
-7. Add finite-temperature terms.
+7. Calculate phonon free energies and correct the TDB before sampling.
 
-Use ideal configurational entropy from CIF partial occupancies where present. For vibrational corrections, select key compounds and element reference structures for the current system. Create `phonon_targets.csv`:
+Use ideal configurational entropy from CIF partial occupancies where present. Then calculate vibrational free energies for the relaxed structures that are actually used in the TDB. Include all stoichiometric compound phases that may appear in the final diagram and one elemental reference structure per component. Do not treat phonons as optional for the final result unless the user explicitly asks to skip them or the calculation fails after reasonable attempts.
+
+First create `element_phonon_references.csv` from current-system elemental reference structures:
 
 ```csv
-phase,path,is_reference
-A_REF,path/to/A/CONTCAR,true
-B_REF,path/to/B/CONTCAR,true
-C_REF,path/to/C/CONTCAR,true
-P_AB2,path/to/P_AB2/CONTCAR,false
+element,phase,path
+A,A_REF,path/to/A/CONTCAR
+B,B_REF,path/to/B/CONTCAR
+C,C_REF,path/to/C/CONTCAR
+```
+
+Generate the phonon target and reference tables from the ORB-relaxed compound structures:
+
+```powershell
+wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && python prepare_phonon_targets.py --compound-energies compound_orb/compound_energies.csv --reference-structures element_phonon_references.csv --targets-output phonon_targets.csv --references-output phonon_references.csv"
 ```
 
 Run at the target temperature:
@@ -126,14 +137,7 @@ Run at the target temperature:
 wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && python calc_vibrational_free_energy.py --targets phonon_targets.csv --temperature <T_K> --mesh 12,12,12 --supercell 2,2,2 --output-dir phonon_free_energy"
 ```
 
-For large structures, `--supercell 1,1,1` can be used as a fast approximation, but report it clearly. Create `phonon_references.csv`:
-
-```csv
-element,phase
-A,A_REF
-B,B_REF
-C,C_REF
-```
+For large structures, `--supercell 1,1,1` can be used as a fast approximation, but report it clearly.
 
 Convert to formation vibrational corrections, where `correction_eV_atom = F_vib(phase) - sum(x_i F_vib(element_i))`, then apply it:
 
@@ -142,16 +146,18 @@ wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && s
 wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && python apply_thermal_corrections.py --base-tdb <SYSTEM>_orb_compounds.tdb --corrections thermal_corrections_from_phonons.csv --output <SYSTEM>_orb_phonon_<T_K>K.tdb"
 ```
 
+The corrected `<SYSTEM>_orb_phonon_<T_K>K.tdb` is the default final TDB for the phase diagram. Compare it with the uncorrected TDB only as a diagnostic.
+
 8. Sample the ternary section at high resolution.
 
 ```powershell
-wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && python sample_ternary_isotherm.py --tdb <FINAL>.tdb --components A,B,C --temperature <T_K> --step 0.005 --csv <SYSTEM>_<T_K>K_step0005_grid.csv"
+wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && python sample_ternary_isotherm.py --tdb <SYSTEM>_orb_phonon_<T_K>K.tdb --components A,B,C --temperature <T_K> --step 0.005 --csv <SYSTEM>_<T_K>K_phonon_step0005_grid.csv"
 ```
 
 9. Plot in Thermo-Calc style with colored regions and straight fitted phase boundaries.
 
 ```powershell
-wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && python plot_thermocalc_style_ternary.py --grid <SYSTEM>_<T_K>K_step0005_grid.csv --components A,B,C --temperature '<T_K> K' --output <SYSTEM>_<T_K>K_thermocalc_style.png --label-column assemblage --max-internal-labels 26 --straight-boundaries --min-straight-boundary-points 25"
+wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && python plot_thermocalc_style_ternary.py --grid <SYSTEM>_<T_K>K_phonon_step0005_grid.csv --components A,B,C --temperature '<T_K> K' --output <SYSTEM>_<T_K>K_phonon_thermocalc_style.png --label-column assemblage --max-internal-labels 26 --straight-boundaries --min-straight-boundary-points 25"
 ```
 
 Use `--markers markers.csv` for important computed compounds. The marker CSV columns are `label,x_a,x_b,x_c`. Use `--phase-aliases aliases.csv` for cleaner display labels with columns `phase,label`.
@@ -162,7 +168,9 @@ Use `--markers markers.csv` for important computed compounds. The marker CSV col
 - Confirm `candidate_compounds.csv` covers all three binary subsystems and the ternary literature/MP cross-check.
 - Confirm `mp_structure_manifest.csv` records MP IDs, formulas, hull energies, CIF paths, and not-found compounds.
 - Confirm all hard-coded element references, endpoint ORB energies, phase names, and sublattice models are for the current system.
+- Confirm `phonon_targets.csv` includes elemental references and every relaxed compound phase used in the corrected TDB.
+- Confirm `thermal_corrections_from_phonons.csv` contains formation vibrational free-energy corrections for all compound phases that require correction.
 - Check that the final grid CSV contains `i`, `j`, three `x_<element>` columns, `assemblage`, `dominant`, and `plot_label`.
 - Check phonon result summaries for imaginary modes and report any adopted approximation.
 - Confirm the final plot has colored assemblage regions, a complete legend, readable internal labels, and straight black boundary segments when requested.
-- Report final `.tdb`, grid `.csv`, `.png`, and `.pdf` paths.
+- Report final phonon-corrected `.tdb`, grid `.csv`, `.png`, and `.pdf` paths.

@@ -4,14 +4,15 @@
 
 ## 简介
 
-`mat-phaseforge-calphad` 是一个 Codex skill，用于基于 PhaseForge、ORB/MLIP 结构能量、Materials Project 结构检索、pycalphad TDB 构建和三元等温截面采样，生成计算驱动的 CALPHAD-like 三元相图工作流。
+`mat-phaseforge-calphad` 是一个 Codex skill，用于基于 PhaseForge、ORB/MLIP 结构能量、Materials Project 结构检索、pycalphad TDB 构建、声子自由能校正和三元等温截面采样，生成计算驱动的 CALPHAD-like 三元相图工作流。
 
 它适用于：
 
 - 为任意三元体系建立候选二元/三元化合物清单；
 - 下载或整理 Materials Project、本地 CIF、文献原型结构；
 - 计算固溶体和化合物的 MLIP/ORB 能量；
-- 构建包含化合物相和可选热修正的 TDB；
+- 对 relaxed 结构计算声子自由能和形成振动自由能校正；
+- 构建包含化合物相和声子校正的 TDB；
 - 使用 pycalphad 采样高分辨率等温截面；
 - 绘制接近 Thermo-Calc 风格的彩色三元相图。
 
@@ -30,6 +31,7 @@
 │   ├── calc_cif_compound_energies.py
 │   ├── merge_compound_energies.py
 │   ├── build_compound_tdb.py
+│   ├── prepare_phonon_targets.py
 │   ├── calc_vibrational_free_energy.py
 │   ├── make_vibrational_corrections.py
 │   ├── apply_thermal_corrections.py
@@ -56,7 +58,7 @@ git clone https://github.com/kk154/PhaseForge-CALPHAD-skill.git C:\Users\15461\.
 使用 mat-phaseforge-calphad skill，帮我计算 Ni-Al-Cr 在 1000 K 的三元等温相图。
 ```
 
-skill 会引导 Codex 建立运行目录、复制脚本、检索候选化合物、运行 PhaseForge/ORB、构建 TDB、采样相图并绘图。具体流程和命令模板见 `SKILL.md`。
+skill 会引导 Codex 建立运行目录、复制脚本、检索候选化合物、运行 PhaseForge/ORB、对 relaxed 结构计算声子自由能、转换为形成振动自由能校正、构建声子校正 TDB、采样相图并绘图。具体流程和命令模板见 `SKILL.md`。
 
 ## 依赖
 
@@ -81,14 +83,15 @@ skill 会引导 Codex 建立运行目录、复制脚本、检索候选化合物�
 
 ## English
 
-`mat-phaseforge-calphad` is a Codex skill for calculation-driven CALPHAD-like ternary isothermal phase-diagram workflows. It combines PhaseForge, ORB/MLIP structure energetics, Materials Project structure retrieval, pycalphad TDB generation, optional vibrational corrections, high-resolution ternary grid sampling, and Thermo-Calc-style plotting.
+`mat-phaseforge-calphad` is a Codex skill for calculation-driven CALPHAD-like ternary isothermal phase-diagram workflows. It combines PhaseForge, ORB/MLIP structure energetics, Materials Project structure retrieval, pycalphad TDB generation, phonon free-energy corrections, high-resolution ternary grid sampling, and Thermo-Calc-style plotting.
 
 It is useful for:
 
 - building binary and ternary candidate-compound lists for a user-specified ternary system;
 - collecting structures from Materials Project, local CIF files, and literature prototypes;
 - computing solid-solution and compound energetics with MLIP/ORB workflows;
-- constructing TDB files with stoichiometric compounds and optional thermal corrections;
+- calculating phonon free energies and formation vibrational free-energy corrections for relaxed structures;
+- constructing TDB files with stoichiometric compounds and phonon corrections;
 - sampling ternary isothermal sections with pycalphad;
 - plotting colored ternary phase diagrams with readable labels and fitted straight boundaries.
 
@@ -107,6 +110,7 @@ It is useful for:
 │   ├── calc_cif_compound_energies.py
 │   ├── merge_compound_energies.py
 │   ├── build_compound_tdb.py
+│   ├── prepare_phonon_targets.py
 │   ├── calc_vibrational_free_energy.py
 │   ├── make_vibrational_corrections.py
 │   ├── apply_thermal_corrections.py
@@ -133,7 +137,7 @@ Ask Codex for a task such as:
 Use the mat-phaseforge-calphad skill to calculate a Ni-Al-Cr ternary isothermal phase diagram at 1000 K.
 ```
 
-The skill guides Codex through run-directory setup, script copying, compound discovery, PhaseForge/ORB calculations, TDB construction, ternary sampling, and plotting. See `SKILL.md` for the complete workflow and command templates.
+The skill guides Codex through run-directory setup, script copying, compound discovery, PhaseForge/ORB calculations, phonon free-energy calculations for relaxed structures, formation vibrational free-energy correction, phonon-corrected TDB construction, ternary sampling, and plotting. See `SKILL.md` for the complete workflow and command templates.
 
 ## Dependencies
 

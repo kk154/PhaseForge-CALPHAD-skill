@@ -108,8 +108,10 @@ def main() -> None:
         assert best_result is not None and best_structure is not None
         structure = candidate_structures[best_index]
         final_structure = best_structure
-        final_structure.to(workdir / "CONTCAR", fmt="poscar")
-        final_structure.to(workdir / f"{cif_path.stem}_relaxed.cif", fmt="cif")
+        relaxed_structure_path = workdir / "CONTCAR"
+        relaxed_cif_path = workdir / f"{cif_path.stem}_relaxed.cif"
+        final_structure.to(relaxed_structure_path, fmt="poscar")
+        final_structure.to(relaxed_cif_path, fmt="cif")
 
         formula_counts = formula_counts_from_name(cif_path)
         formula_atoms = sum(formula_counts.values())
@@ -119,6 +121,8 @@ def main() -> None:
 
         row = {
             "source_cif": str(cif_path),
+            "relaxed_structure": str(relaxed_structure_path),
+            "relaxed_cif": str(relaxed_cif_path),
             "phase": phase_name_from_formula(cif_path, components),
             "display_formula": cif_path.stem,
             "parsed_formula": structure.composition.reduced_formula,
@@ -142,6 +146,8 @@ def main() -> None:
             f,
             fieldnames=[
                 "source_cif",
+                "relaxed_structure",
+                "relaxed_cif",
                 "phase",
                 "display_formula",
                 "parsed_formula",
