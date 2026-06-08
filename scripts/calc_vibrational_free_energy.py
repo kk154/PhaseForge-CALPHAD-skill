@@ -151,7 +151,11 @@ def main() -> None:
     parser.add_argument("--tmax", type=float, default=1400)
     parser.add_argument("--tstep", type=float, default=10)
     parser.add_argument("--displacement", type=float, default=0.01)
-    parser.add_argument("--supercell", default="1,1,1", help="Diagonal supercell, e.g. 1,1,1 or 2,2,2")
+    parser.add_argument(
+        "--supercell",
+        default="2,2,2",
+        help="Diagonal supercell. Default 2,2,2 is the production setting; use 1,1,1 only for fast screening.",
+    )
     parser.add_argument("--mesh", default="12,12,12", help="Phonon q mesh")
     parser.add_argument("--phases", nargs="*", help="Optional subset of phase labels to calculate")
     parser.add_argument("--model", default="orb-v3-conservative-inf-omat")

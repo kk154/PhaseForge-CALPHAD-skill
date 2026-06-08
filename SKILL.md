@@ -137,7 +137,7 @@ Run at the target temperature:
 wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && python calc_vibrational_free_energy.py --targets phonon_targets.csv --temperature <T_K> --mesh 12,12,12 --supercell 2,2,2 --output-dir phonon_free_energy"
 ```
 
-For large structures, `--supercell 1,1,1` can be used as a fast approximation, but report it clearly.
+Use `--supercell 2,2,2` as the rigorous default for production phase diagrams. For very large structures, `--supercell 1,1,1` can be used only as a fast approximation, and the final response must report that approximation clearly.
 
 Convert to formation vibrational corrections, where `correction_eV_atom = F_vib(phase) - sum(x_i F_vib(element_i))`, then apply it:
 
