@@ -73,13 +73,6 @@ skill 会引导 Codex 建立运行目录、复制脚本、检索候选化合物�
 
 实际依赖取决于你执行的步骤。例如，只绘图和采样不需要运行 ORB；下载 Materials Project 结构需要 `MP_API_KEY`。
 
-## 数据与安全
-
-- 不要把 Materials Project API key 写入脚本、README、日志或提交记录。
-- 使用环境变量，例如 `MP_API_KEY`。
-- 不建议提交运行目录、TDB 中间产物、下载的 CIF 数据、phonopy 超胞计算结果和大图表。
-- 对新体系要先做文献和数据库检索，不要复用其他体系的元素参考能、相名或子晶格模型。
-
 ## 许可证
 
 本仓库使用 MIT License。详见 `LICENSE`。
@@ -156,13 +149,6 @@ The bundled scripts commonly rely on:
 - optional GPU/CUDA support.
 
 The exact dependencies depend on the selected workflow steps. For example, plotting and pycalphad sampling do not require ORB execution, while Materials Project downloads require `MP_API_KEY`.
-
-## Data And Security
-
-- Do not write Materials Project API keys into scripts, README files, logs, or commits.
-- Use an environment variable such as `MP_API_KEY`.
-- Avoid committing run directories, generated TDB intermediates, downloaded CIF data, phonopy supercell outputs, and large plot artifacts.
-- For every new system, perform literature and database checks first. Do not reuse element references, phase names, or sublattice models from another chemical system.
 
 ## License
 
