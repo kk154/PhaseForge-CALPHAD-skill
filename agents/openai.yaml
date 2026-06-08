@@ -1,0 +1,6 @@
+interface:
+  display_name: "PhaseForge CALPHAD"
+  short_description: "Literature-to-MP phase diagrams"
+  default_prompt: "Use $mat-phaseforge-calphad to identify compounds from literature and phase diagrams, download MP structures, then compute a ternary isothermal phase diagram with PhaseForge/ORB, pycalphad, optional phonons, and Thermo-Calc-style plotting."
+policy:
+  allow_implicit_invocation: true
