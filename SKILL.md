@@ -1,6 +1,6 @@
 ---
 name: mat-phaseforge-calphad
-description: Compute calculation-driven ternary isothermal phase diagrams for any user-specified chemical system and temperature using PhaseForge, ORB/MLIP structure energetics, literature/binary-phase-diagram compound discovery, Materials Project structure downloads, local CIFs, pycalphad TDB construction, phonopy vibrational free-energy and formation-vibrational-free-energy corrections for the relaxed structures, high-resolution grid sampling, and Thermo-Calc-style colored straight-boundary plotting. Use when asked to identify binary/ternary compounds in a system, download their structures from MP, calculate or refine a CALPHAD-like computed phase diagram workflow, or plot a computed isothermal section without fitting to experiment.
+description: Compute calculation-driven ternary isothermal phase diagrams for any user-specified chemical system and temperature using PhaseForge, ORB/MLIP structure energetics, literature/binary-phase-diagram compound discovery, Materials Project structure downloads, local CIFs, pycalphad TDB construction, phonopy vibrational free-energy and formation-vibrational-free-energy corrections for relaxed solids, SQS/LAMMPS practical CALPHAD LIQUID modeling when liquid may be present, high-resolution grid sampling, and Thermo-Calc-style colored straight-boundary plotting. Use when asked to identify binary/ternary compounds in a system, download their structures from MP, calculate or refine a CALPHAD-like computed phase diagram workflow, or plot a computed isothermal section without fitting to experiment.
 ---
 
 # PhaseForge CALPHAD Phase Diagrams
@@ -11,13 +11,17 @@ Do not fit, tune, or optimize parameters against an experimental phase diagram u
 
 The default final diagram must use phonon-corrected Gibbs energies. After ORB relaxation, calculate phonopy vibrational free energies for the relaxed compound structures and the elemental reference structures, convert them to formation vibrational free energies, apply those corrections to the TDB, and sample/plot the corrected TDB. A 0 K ORB-only TDB is an intermediate diagnostic, not the final result, unless the user explicitly asks to skip phonons or a phonon calculation is infeasible.
 
+If the target temperature may include liquid regions, include `LIQUID` as a computed SQS/LAMMPS phase. Liquid is not phonon-corrected. Its practical CALPHAD model uses LAMMPS/MLIP liquid enthalpy, pure-element melting terms, ideal mixing entropy from the `LIQUID` solution model, and fitted excess terms `L(T)=a+b*T` from multi-temperature MD.
+
 ## Inputs To Establish
 
 - Components: exactly three real components for the ternary section, for example `ER,FE,TI` or `NI,AL,CR`.
 - Temperature: Kelvin preferred; convert Celsius by `T_K = T_C + 273.15`.
-- PhaseForge level and lattices: usually `PHASEFORGE_LEVEL=2` and `BCC_A2,FCC_A1,HCP_A3,FCC_L12,...` as relevant.
+- PhaseForge level and lattices: usually `PHASEFORGE_LEVEL=2` and `BCC_A2,FCC_A1,HCP_A3,FCC_L12,...` as relevant. Add `LIQUID` when the target temperature may enter liquid or solid-liquid fields.
 - Structures: local CIFs first; query Materials Project only for missing phases.
 - Elemental phonon reference structures: one relaxed structure for each component, with phase labels such as `A_REF`, `B_REF`, `C_REF`.
+- Liquid temperature grid: when using `LIQUID`, set `PHASEFORGE_TEMPERATURE_K=<T_K>` and optionally `PHASEFORGE_LIQUID_TEMPERATURES=<T_K-100>,<T_K>,<T_K+100>`.
+- Liquid LAMMPS controls: optionally set `PHASEFORGE_LMP`, `PHASEFORGE_GNNP_ROOT`, `PHASEFORGE_GNNP_PAIR_STYLE`, `PHASEFORGE_LIQUID_EQUIL_STEPS`, and `PHASEFORGE_LIQUID_MD_STEPS`.
 - Compound and solution-phase models: derive from structures and chemistry of the target system. Do not reuse another system's sublattice model.
 - Plot resolution: use `step=0.005` for detailed line-style Thermo-Calc plots when runtime permits.
 
@@ -27,7 +31,10 @@ Never store Materials Project API keys in the skill, scripts, docs, logs, or com
 
 Scripts live in `scripts/`; copy them into the run directory and patch per-system scripts there when needed.
 
-- `run_phaseforge.sh`: generic PhaseForge SQS solid-solution energetics. Set `PHASEFORGE_SPECIES=A,B,C`.
+- `run_phaseforge.sh`: generic PhaseForge SQS solid-solution energetics and SQS/LAMMPS liquid energetics. Set `PHASEFORGE_SPECIES=A,B,C`; set `PHASEFORGE_TEMPERATURE_K` if `LIQUID` is included.
+- `run_liquid_lammps.py`: run one LIQUID SQS LAMMPS/MLIP MD calculation and write averaged liquid enthalpy.
+- `collect_liquid_md_energies.py`: collect LIQUID MD summaries into `liquid_md_energies.csv`.
+- `fit_liquid_tdb.py`: fit a practical CALPHAD `LIQUID` TDB model from multi-temperature liquid enthalpies.
 - `calc_cif_compound_energies.py`: ORB relaxation for local CIF compounds. This script may need minor phase-name ordering edits if the current filename-to-phase naming is not appropriate.
 - `download_mp_structures.py`: download CIFs from Materials Project for candidate compounds found from literature/phase-diagram review.
 - `merge_compound_energies.py`: merge compound energy tables.
@@ -77,11 +84,19 @@ wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && s
 
 If MP has no structure for an experimentally reported compound, keep it in `candidate_compounds.csv`, note `status=not_found` in the manifest, and search COD/ICSD/literature CIFs or construct a prototype-substituted structure. Do not silently drop literature phases because MP lacks them.
 
-3. Run PhaseForge/ORB solid-solution energetics.
+3. Run PhaseForge/ORB solid-solution energetics. Include LIQUID only when physically relevant.
 
 ```powershell
 wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && PHASEFORGE_SPECIES=A,B,C PHASEFORGE_LEVEL=2 PHASEFORGE_ORB_DEVICE=cuda PHASEFORGE_LATTICES=BCC_A2,FCC_A1,HCP_A3 bash run_phaseforge.sh"
 ```
+
+For a target temperature with liquid or solid-liquid regions, add `LIQUID` and pass the temperature. The default liquid grid is `<T_K>-100,<T_K>,<T_K>+100` unless `PHASEFORGE_LIQUID_TEMPERATURES` is set. Use `PHASEFORGE_LMP` to override the LAMMPS executable and `PHASEFORGE_LIQUID_MD_STEPS` to change the production length.
+
+```powershell
+wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && PHASEFORGE_SPECIES=A,B,C PHASEFORGE_LEVEL=2 PHASEFORGE_ORB_DEVICE=cuda PHASEFORGE_TEMPERATURE_K=<T_K> PHASEFORGE_LIQUID_TEMPERATURES=<T1>,<T_K>,<T3> PHASEFORGE_LATTICES=BCC_A2,FCC_A1,HCP_A3,LIQUID bash run_phaseforge.sh"
+```
+
+`run_phaseforge.sh` uses solid MLIP relaxation for solid lattices and `run_liquid_lammps.py` for `LIQUID` SQS structures. Liquid MD writes `liquid_md_summary.json`, target-temperature `energy`, and the run-level `liquid_md_energies.csv`.
 
 4. Relax compound CIFs with ORB. Use CIFs supplied by the user first, then MP-downloaded CIFs, then manually sourced/prototype structures. Document every structure origin in the manifest.
 
@@ -148,16 +163,24 @@ wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && s
 
 The corrected `<SYSTEM>_orb_phonon_<T_K>K.tdb` is the default final TDB for the phase diagram. Compare it with the uncorrected TDB only as a diagnostic.
 
-8. Sample the ternary section at high resolution.
+8. If LIQUID was calculated, fit the liquid TDB on top of the phonon-corrected solid TDB.
 
 ```powershell
-wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && python sample_ternary_isotherm.py --tdb <SYSTEM>_orb_phonon_<T_K>K.tdb --components A,B,C --temperature <T_K> --step 0.005 --csv <SYSTEM>_<T_K>K_phonon_step0005_grid.csv"
+wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && python fit_liquid_tdb.py --base-tdb <SYSTEM>_orb_phonon_<T_K>K.tdb --liquid-md liquid_md_energies.csv --references element_references.csv --components A,B,C --temperature <T_K> --output <SYSTEM>_orb_phonon_liquid_<T_K>K.tdb"
 ```
 
-9. Plot in Thermo-Calc style with colored regions and straight fitted phase boundaries.
+Use `<SYSTEM>_orb_phonon_liquid_<T_K>K.tdb` as the final TDB when liquid is relevant. The liquid model is a practical CALPHAD approximation, not absolute liquid free energy thermodynamic integration.
+
+9. Sample the ternary section at high resolution.
 
 ```powershell
-wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && python plot_thermocalc_style_ternary.py --grid <SYSTEM>_<T_K>K_phonon_step0005_grid.csv --components A,B,C --temperature '<T_K> K' --output <SYSTEM>_<T_K>K_phonon_thermocalc_style.png --label-column assemblage --max-internal-labels 26 --straight-boundaries --min-straight-boundary-points 25"
+wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && python sample_ternary_isotherm.py --tdb <FINAL>.tdb --components A,B,C --temperature <T_K> --step 0.005 --csv <SYSTEM>_<T_K>K_final_step0005_grid.csv"
+```
+
+10. Plot in Thermo-Calc style with colored regions and straight fitted phase boundaries.
+
+```powershell
+wsl bash -lc "cd /mnt/e/codex项目/CALPHAD/phaseforge_runs/<SYSTEM>_<TEMP> && source /home/kk/.venvs/phaseforge-grace-orb/bin/activate && python plot_thermocalc_style_ternary.py --grid <SYSTEM>_<T_K>K_final_step0005_grid.csv --components A,B,C --temperature '<T_K> K' --output <SYSTEM>_<T_K>K_final_thermocalc_style.png --label-column assemblage --max-internal-labels 26 --straight-boundaries --min-straight-boundary-points 25"
 ```
 
 Use `--markers markers.csv` for important computed compounds. The marker CSV columns are `label,x_a,x_b,x_c`. Use `--phase-aliases aliases.csv` for cleaner display labels with columns `phase,label`.
@@ -170,7 +193,9 @@ Use `--markers markers.csv` for important computed compounds. The marker CSV col
 - Confirm all hard-coded element references, endpoint ORB energies, phase names, and sublattice models are for the current system.
 - Confirm `phonon_targets.csv` includes elemental references and every relaxed compound phase used in the corrected TDB.
 - Confirm `thermal_corrections_from_phonons.csv` contains formation vibrational free-energy corrections for all compound phases that require correction.
+- If `LIQUID` is included, confirm `PHASEFORGE_TEMPERATURE_K`, `liquid_md_energies.csv`, `liquid_fit_summary.csv`, and `PHASE LIQUID` in the final TDB.
 - Check that the final grid CSV contains `i`, `j`, three `x_<element>` columns, `assemblage`, `dominant`, and `plot_label`.
 - Check phonon result summaries for imaginary modes and report any adopted approximation.
+- Check liquid MD summaries for pressure, volume, enthalpy, temperature grid, and failed SQS compositions.
 - Confirm the final plot has colored assemblage regions, a complete legend, readable internal labels, and straight black boundary segments when requested.
-- Report final phonon-corrected `.tdb`, grid `.csv`, `.png`, and `.pdf` paths.
+- Report final phonon-corrected or phonon-plus-liquid `.tdb`, grid `.csv`, `.png`, and `.pdf` paths.
